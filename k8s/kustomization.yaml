@@ -1,0 +1,118 @@
+# =============================================================================
+# Phase4B Test Project - Kustomize Configuration
+# =============================================================================
+# Manages and customizes Kubernetes manifests using Kustomize
+#
+# Kustomize allows you to:
+# - Combine multiple manifests
+# - Apply common labels and annotations
+# - Manage different environments (dev, staging, prod)
+# - Override configurations without modifying base files
+#
+# Prerequisites:
+# - kubectl v1.14+ (Kustomize is built-in)
+# OR
+# - Install standalone: https://kubectl.docs.kubernetes.io/installation/kustomize/
+#
+# Usage:
+#   # Preview generated manifests
+#   kubectl kustomize k8s/
+#
+#   # Apply all manifests
+#   kubectl apply -k k8s/
+#
+#   # Delete all resources
+#   kubectl delete -k k8s/
+#
+#   # Diff against cluster
+#   kubectl diff -k k8s/
+# =============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Metadata
+namespace: phase4b_test
+
+# Common Labels (applied to all resources)
+commonLabels:
+  app: phase4b_test
+  managed-by: kustomize
+  project: "Phase4B Test Project"
+
+# Common Annotations (applied to all resources)
+commonAnnotations:
+  author: "Your Name <your.email@example.com>"
+  description: "A brief description of your project"
+
+# Resources to include
+resources:
+- namespace.yaml
+- configmap.yaml
+- deployment.yaml
+- service.yaml
+- ingress.yaml
+- hpa.yaml
+
+# Note: secret.yaml is intentionally excluded (managed separately for security)
+# To create secret: kubectl apply -f k8s/secret.yaml -n phase4b_test
+
+# Images (for updating image tags without editing deployment.yaml)
+images:
+- name: localhost:5000/phase4b_test
+  newTag: latest  # Override with specific version: kubectl kustomize edit set image ...
+
+# ConfigMap Generator (optional - alternative to static configmap.yaml)
+# Uncomment to generate ConfigMap from files or literals
+# configMapGenerator:
+# - name: phase4b_test-config
+#   literals:
+#   - ADWS_LOG_LEVEL=INFO
+#   - ADWS_METRICS_ENABLED=true
+#   files:
+#   - config.toml
+
+# Secret Generator (optional - for non-gitops secrets)
+# NEVER commit this with real values
+# secretGenerator:
+# - name: phase4b_test-secrets
+#   literals:
+#   - OPENAI_API_KEY=sk-...
+#   - ANTHROPIC_API_KEY=sk-ant-...
+
+# Patches (for environment-specific overrides)
+# patchesStrategicMerge:
+# - patches/production.yaml
+# - patches/staging.yaml
+
+# JSON6902 Patches (for precise modifications)
+# patchesJson6902:
+# - target:
+#     group: apps
+#     version: v1
+#     kind: Deployment
+#     name: phase4b_test
+#   patch: |-
+#     - op: replace
+#       path: /spec/replicas
+#       value: 3
+
+# Replica Count Override (optional)
+# replicas:
+# - name: phase4b_test
+#   count: 3
+
+# Name Prefix (optional - useful for multiple deployments)
+# namePrefix: dev-
+
+# Name Suffix (optional)
+# nameSuffix: -v2
+
+# Labels to add (in addition to commonLabels)
+# labels:
+# - pairs:
+#     environment: production
+#     tier: backend
+
+# Build Metadata
+buildMetadata: [managedByLabel]

@@ -1,0 +1,20 @@
+# =============================================================================
+# Phase4B Test Project - Kubernetes Namespace
+# =============================================================================
+# Defines an isolated namespace for deploying the ADWS application
+#
+# Usage:
+#   kubectl apply -f k8s/namespace.yaml
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: phase4b_test
+  labels:
+    app: phase4b_test
+    environment: production
+    managed-by: kubectl
+  annotations:
+    description: "A brief description of your project"
+    maintainer: "Your Name <your.email@example.com>"

@@ -1,0 +1,26 @@
+# =============================================================================
+# Phase4B Test Project - Grafana Dashboard Provisioning
+# =============================================================================
+# Auto-load dashboards from the dashboards/ directory
+#
+# This file is automatically loaded by Grafana on startup when placed in:
+#   /etc/grafana/provisioning/dashboards/
+#
+# For more information:
+# - https://grafana.com/docs/grafana/latest/administration/provisioning/#dashboards
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  # ADWS Dashboards
+  - name: 'ADWS Dashboards'
+    orgId: 1
+    folder: 'ADWS'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: true

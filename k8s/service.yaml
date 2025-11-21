@@ -1,0 +1,64 @@
+# =============================================================================
+# Phase4B Test Project - Kubernetes Service
+# =============================================================================
+# Exposes the ADWS application within the cluster
+#
+# Service Types:
+# - ClusterIP: Internal cluster access only (default)
+# - NodePort: External access via node IP:port
+# - LoadBalancer: External access via cloud load balancer
+#
+# Usage:
+#   kubectl apply -f k8s/service.yaml -n phase4b_test
+#   kubectl get svc -n phase4b_test
+# =============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: phase4b_test
+  namespace: phase4b_test
+  labels:
+    app: phase4b_test
+    component: api
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "false"
+spec:
+  type: ClusterIP  # Change to NodePort or LoadBalancer if external access needed
+  selector:
+    app: phase4b_test
+    component: api
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+    protocol: TCP
+  sessionAffinity: None
+
+---
+# =============================================================================
+# Headless Service (Optional)
+# =============================================================================
+# Used for StatefulSet or when you need direct pod access
+# Uncomment if needed for your use case
+# =============================================================================
+
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: phase4b_test-headless
+#   namespace: phase4b_test
+#   labels:
+#     app: phase4b_test
+#     component: api
+# spec:
+#   type: ClusterIP
+#   clusterIP: None  # Headless service
+#   selector:
+#     app: phase4b_test
+#     component: api
+#   ports:
+#   - name: http
+#     port: 8000
+#     targetPort: http
+#     protocol: TCP

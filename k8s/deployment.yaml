@@ -1,0 +1,201 @@
+# =============================================================================
+# Phase4B Test Project - Kubernetes Deployment
+# =============================================================================
+# Defines the deployment strategy and pod template for ADWS application
+#
+# Features:
+# - Rolling update strategy for zero-downtime deployments
+# - Resource limits and requests for optimal scheduling
+# - Liveness and readiness probes for health monitoring
+# - Security context with non-root user
+# - Persistent volume for stateful data
+#
+# Usage:
+#   kubectl apply -f k8s/deployment.yaml -n phase4b_test
+#   kubectl rollout status deployment/phase4b_test -n phase4b_test
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phase4b_test
+  namespace: phase4b_test
+  labels:
+    app: phase4b_test
+    component: api
+    version: "2.0.0"
+  annotations:
+    description: "ADWS API server deployment"
+spec:
+  # Replica Configuration
+  replicas: 2  # Start with 2 replicas for high availability
+  revisionHistoryLimit: 10  # Keep last 10 revisions for rollback
+
+  # Pod Selection
+  selector:
+    matchLabels:
+      app: phase4b_test
+      component: api
+
+  # Deployment Strategy
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Allow 1 extra pod during updates
+      maxUnavailable: 0  # Ensure zero downtime
+
+  # Pod Template
+  template:
+    metadata:
+      labels:
+        app: phase4b_test
+        component: api
+        version: "2.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Security Context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      # Init Containers (optional - uncomment if needed)
+      # initContainers:
+      # - name: init-db
+      #   image: localhost:5000/phase4b_test:latest
+      #   command: ['sh', '-c', 'mkdir -p /app/.adws/state /app/.adws/events && chmod -R 755 /app/.adws']
+      #   volumeMounts:
+      #   - name: adws-data
+      #     mountPath: /app/.adws
+
+      # Application Container
+      containers:
+      - name: phase4b_test
+        image: localhost:5000/phase4b_test:latest
+        imagePullPolicy: Always
+
+        # Container Ports
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+
+        # Environment Variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: phase4b_test-config
+
+        # Sensitive Environment Variables from Secret
+        env:
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: phase4b_test-secrets
+              key: ANTHROPIC_API_KEY
+
+        # Resource Limits and Requests
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        # Volume Mounts
+        volumeMounts:
+        - name: adws-data
+          mountPath: /app/.adws
+        - name: logs
+          mountPath: /app/logs
+
+        # Liveness Probe
+        # Checks if the container is still running
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 40
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Readiness Probe
+        # Checks if the container is ready to serve traffic
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Startup Probe
+        # Gives the container time to start up
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 12  # 60 seconds to start
+
+        # Security Context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # Set to true if app doesn't need to write to /
+          capabilities:
+            drop:
+            - ALL
+
+      # Volumes
+      volumes:
+      - name: adws-data
+        persistentVolumeClaim:
+          claimName: phase4b_test-data-pvc
+      - name: logs
+        emptyDir: {}
+
+      # DNS Configuration
+      dnsPolicy: ClusterFirst
+
+      # Restart Policy
+      restartPolicy: Always
+
+      # Termination Grace Period
+      terminationGracePeriodSeconds: 30
+
+---
+# =============================================================================
+# Persistent Volume Claim for ADWS Data
+# =============================================================================
+# Stores stateful data (database, events) across pod restarts
+#
+# Note: Requires a StorageClass to be configured in your cluster
+# For local development, use 'hostpath' or 'local-path' storage class
+# =============================================================================
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: phase4b_test-data-pvc
+  namespace: phase4b_test
+  labels:
+    app: phase4b_test
+    component: storage
+spec:
+  accessModes:
+  - ReadWriteOnce  # Single node access
+  resources:
+    requests:
+      storage: 1Gi  # Adjust based on your needs
+  # storageClassName: local-path  # Uncomment and adjust for your cluster

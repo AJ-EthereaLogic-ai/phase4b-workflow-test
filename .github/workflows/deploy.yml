@@ -1,0 +1,208 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+      version:
+        description: 'Docker image version tag'
+        required: true
+        type: string
+      enable_rollback:
+        description: 'Enable automatic rollback on failure'
+        required: true
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: string
+      version:
+        description: 'Docker image version tag'
+        required: true
+        type: string
+      enable_rollback:
+        description: 'Enable automatic rollback on failure'
+        required: false
+        type: boolean
+        default: true
+
+env:
+  REGISTRY: localhost:5000
+  IMAGE_NAME: phase4b_test
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://phase4b_test.${{ inputs.environment }}.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      - name: Configure kubectl context
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          kubectl config use-context ${{ inputs.environment }}
+
+      - name: Verify cluster connectivity
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Set environment variables
+        run: |
+          echo "DOCKER_IMAGE_TAG=${{ inputs.version }}" >> $GITHUB_ENV
+          echo "ENABLE_ROLLBACK=${{ inputs.enable_rollback && 'yes' || 'no' }}" >> $GITHUB_ENV
+
+      - name: Log in to Docker Registry
+        run: |
+          echo "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} \
+            -u "${{ secrets.DOCKER_REGISTRY_USER }}" \
+            --password-stdin
+
+      - name: Make deployment script executable
+        run: chmod +x scripts/deploy_production.sh
+
+      - name: Run deployment
+        id: deploy
+        run: |
+          ./scripts/deploy_production.sh ${{ inputs.version }}
+        env:
+          DOCKER_REGISTRY: ${{ env.REGISTRY }}
+          DOCKER_IMAGE: ${{ env.IMAGE_NAME }}
+          DOCKER_IMAGE_TAG: ${{ inputs.version }}
+          ENABLE_ROLLBACK: ${{ env.ENABLE_ROLLBACK }}
+
+      - name: Get deployment status
+        if: always()
+        run: |
+          kubectl get deployments -n phase4b_test
+          kubectl get pods -n phase4b_test
+          kubectl get services -n phase4b_test
+
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    needs: deploy
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      - name: Configure kubectl context
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          kubectl config use-context ${{ inputs.environment }}
+
+      - name: Make health check script executable
+        run: chmod +x scripts/health_check.sh
+
+      - name: Run health checks
+        id: health
+        run: |
+          ./scripts/health_check.sh
+        env:
+          HEALTH_CHECK_RETRIES: 30
+          HEALTH_CHECK_INTERVAL: 10
+
+      - name: Verify endpoints
+        run: |
+          # Get service endpoint
+          SERVICE_IP=$(kubectl get svc phase4b_test-service -n phase4b_test \
+            -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+          if [ -n "$SERVICE_IP" ]; then
+            echo "Service IP: $SERVICE_IP"
+            curl -f http://$SERVICE_IP:8000/health || echo "Health endpoint not accessible externally yet"
+          else
+            echo "LoadBalancer IP not yet assigned"
+          fi
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy, health-check]
+    if: failure() && inputs.enable_rollback
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      - name: Configure kubectl context
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          kubectl config use-context ${{ inputs.environment }}
+
+      - name: Make rollback script executable
+        run: chmod +x scripts/rollback.sh
+
+      - name: Execute rollback
+        run: |
+          ./scripts/rollback.sh
+        env:
+          ROLLBACK_MODE: auto
+
+      - name: Verify rollback
+        run: |
+          kubectl get deployments -n phase4b_test
+          kubectl rollout status deployment/phase4b_test-deployment \
+            -n phase4b_test --timeout=5m
+
+      - name: Send rollback notification
+        run: |
+          echo "::error::Deployment failed and was rolled back to previous version"
+
+  summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [deploy, health-check]
+    if: always()
+
+    steps:
+      - name: Check deployment status
+        run: |
+          echo "Deploy: ${{ needs.deploy.result }}"
+          echo "Health Check: ${{ needs.health-check.result }}"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Version: ${{ inputs.version }}"
+
+          if [ "${{ needs.deploy.result }}" != "success" ] || [ "${{ needs.health-check.result }}" != "success" ]; then
+            echo "::error::Deployment failed"
+            exit 1
+          fi
+
+          echo "::notice::Deployment successful to ${{ inputs.environment }} with version ${{ inputs.version }}"

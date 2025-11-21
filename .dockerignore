@@ -1,0 +1,151 @@
+# =============================================================================
+# Docker Ignore File for ADWS
+# =============================================================================
+# Excludes unnecessary files from Docker build context to:
+# - Reduce build context size
+# - Speed up builds
+# - Prevent sensitive data from being copied into the image
+# =============================================================================
+
+# Git and version control
+.git
+.gitignore
+.gitattributes
+.github
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+.installed.cfg
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+
+# Testing and coverage
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Documentation builds
+docs/_build/
+docs/reports/
+site/
+
+# ADWS runtime data (should be in volumes, not in image)
+.adws/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.log
+logs/
+
+# Environment files (sensitive data)
+.env
+.env.*
+!.env.example
+
+# Docker files (avoid recursion)
+Dockerfile
+Dockerfile.*
+docker-compose.yml
+docker-compose.*.yml
+.dockerignore
+
+# Kubernetes files
+k8s/
+*.yaml
+*.yml
+!pyproject.toml
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local development files
+*.local
+.envrc
+.direnv/
+
+# Testing and benchmarks
+tests/
+test_*.py
+*_test.py
+benchmarks/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Scripts (build scripts not needed in runtime)
+scripts/
+Makefile
+
+# Cookiecutter template files
+cookiecutter-adws-uv/
+
+# Grafana dashboards (optional - can be excluded if not needed at runtime)
+# dashboards/
+
+# Node modules (if any)
+node_modules/
+
+# Backup files
+*.bak
+*~

@@ -1,0 +1,28 @@
+# Routing Engine Configuration
+#
+# This file configures routing heuristics for provider selection.
+# Settings can be overridden by environment variables.
+
+routing:
+  # Cost optimization ordering (cheapest first)
+  # Override with: ADWS_ROUTING_COST_ORDER="gemini,openai,claude"
+  cost_order:
+    - gemini
+    - openai
+    - claude
+
+  # Quality optimization ordering (highest quality first)
+  # Override with: ADWS_ROUTING_QUALITY_ORDER="claude,openai,gemini"
+  quality_order:
+    - claude
+    - openai
+    - gemini
+
+  # Latency optimization ordering (fastest first)
+  # Empty list means use real-time metrics from providers
+  # Override with: ADWS_ROUTING_LATENCY_ORDER="openai,claude,gemini"
+  latency_order: []
+
+  # Enable caching of capability checks for performance
+  # Override with: ADWS_ROUTING_ENABLE_CAPABILITY_CACHE="true"
+  enable_capability_cache: true

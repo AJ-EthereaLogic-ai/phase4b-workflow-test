@@ -1,0 +1,280 @@
+# =============================================================================
+# Docker Compose Configuration for Phase4B Test Project Production Stack
+# =============================================================================
+# Complete production-ready stack with:
+# - Phase4B Test Project API server (health checks + metrics)
+# - Prometheus (metrics collection and alerting)
+# - Grafana (visualization and dashboards)
+#
+# Usage:
+#   Start:    docker compose up -d
+#   Stop:     docker compose down
+#   Logs:     docker compose logs -f
+#   Rebuild:  docker compose up -d --build
+#
+# Ports:
+#   8000  - Phase4B Test Project API (health checks, metrics)
+#   9090  - Prometheus UI
+#   3000  - Grafana UI (admin/admin)
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # Phase4B Test Project - AI Developer Workflow System
+  # ===========================================================================
+  phase4b_test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ADWS_VERSION: "2.0.0"
+    image: localhost:5000/phase4b_test:latest
+    container_name: phase4b_test
+    restart: unless-stopped
+
+    # Port mapping
+    ports:
+      - "8000:8000"
+
+    # Environment variables
+    environment:
+      # Logging
+      ADWS_LOG_LEVEL: INFO
+      ADWS_LOG_FORMAT: json
+
+      # Observability
+      ADWS_METRICS_ENABLED: "true"
+      ADWS_HEALTH_CHECKS_ENABLED: "true"
+
+      # API configuration
+      ADWS_API_HOST: "0.0.0.0"
+      ADWS_API_PORT: "8000"
+
+      # Paths
+      ADWS_WORKSPACE_DIR: /app/.adws
+      ADWS_DB_PATH: /app/.adws/state/workflows.db
+      ADWS_EVENT_BUS_DIR: /app/.adws/events
+
+      # LLM Provider API Keys (set these via .env file)
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # GEMINI_API_KEY: ${GEMINI_API_KEY}
+
+    # Environment file (for secrets)
+    env_file:
+      - .env
+
+    # Volume mounts for persistence
+    volumes:
+      - adws-data:/app/.adws
+      - adws-logs:/app/logs
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Logging configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Network
+    networks:
+      - adws-network
+
+  # ===========================================================================
+  # Prometheus - Metrics Collection and Alerting
+  # ===========================================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    restart: unless-stopped
+
+    # Port mapping
+    ports:
+      - "9090:9090"
+
+    # Command arguments
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+
+    # Volume mounts
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/dashboards/adws_alerts.yml:/etc/prometheus/rules/adws_alerts.yml:ro
+      - prometheus-data:/prometheus
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    # Logging configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Network
+    networks:
+      - adws-network
+
+    # Dependencies
+    depends_on:
+      phase4b_test:
+        condition: service_healthy
+
+  # ===========================================================================
+  # Grafana - Visualization and Dashboards
+  # ===========================================================================
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: grafana
+    restart: unless-stopped
+
+    # Port mapping
+    ports:
+      - "3000:3000"
+
+    # Environment variables
+    environment:
+      # Security
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+
+      # Server
+      GF_SERVER_ROOT_URL: http://localhost:3000
+      GF_SERVER_SERVE_FROM_SUB_PATH: "false"
+
+      # Analytics
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+
+      # Alerting
+      GF_ALERTING_ENABLED: "true"
+
+      # Users
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+
+      # Auth
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+
+      # Plugins
+      GF_INSTALL_PLUGINS: ""
+
+    # Volume mounts
+    volumes:
+      # Data persistence
+      - grafana-data:/var/lib/grafana
+
+      # Provisioning
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./monitoring/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards:ro
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    # Logging configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Network
+    networks:
+      - adws-network
+
+    # Dependencies
+    depends_on:
+      prometheus:
+        condition: service_healthy
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  adws-network:
+    driver: bridge
+    name: adws-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  # ADWS data (database, events, state)
+  adws-data:
+    driver: local
+    name: adws-data
+
+  # ADWS logs
+  adws-logs:
+    driver: local
+    name: adws-logs
+
+  # Prometheus data (time-series database)
+  prometheus-data:
+    driver: local
+    name: prometheus-data
+
+  # Grafana data (dashboards, users, settings)
+  grafana-data:
+    driver: local
+    name: grafana-data

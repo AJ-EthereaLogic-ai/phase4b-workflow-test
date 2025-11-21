@@ -1,0 +1,161 @@
+# =============================================================================
+# Phase4B Test Project - Prometheus Configuration
+# =============================================================================
+# Prometheus scrape configuration for monitoring ADWS application
+#
+# This configuration file defines:
+# - Global scrape settings
+# - Alert manager configuration
+# - Scrape jobs for ADWS metrics
+# - Self-monitoring for Prometheus
+#
+# Metrics Endpoints:
+# - ADWS API: http://phase4b_test:8000/metrics
+# - Prometheus: http://localhost:9090
+#
+# For more information:
+# - https://prometheus.io/docs/prometheus/latest/configuration/configuration/
+# =============================================================================
+
+# Global configuration
+global:
+  # How frequently to scrape targets by default
+  scrape_interval: 15s
+
+  # How frequently to evaluate rules
+  evaluation_interval: 15s
+
+  # Timeout for scraping targets
+  scrape_timeout: 10s
+
+  # External labels to attach to any time series or alerts
+  external_labels:
+    cluster: 'phase4b_test'
+    environment: '${DEPLOYMENT_ENV:-development}'
+    monitor: 'adws-monitor'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            # Add your Alertmanager instance here
+            # Example: - 'alertmanager:9093'
+      timeout: 10s
+
+# Load rules files
+rule_files:
+  - '/etc/prometheus/rules/*.yml'
+  - '/etc/prometheus/dashboards/adws_alerts.yml'
+
+# Scrape configurations
+scrape_configs:
+  # =============================================================================
+  # ADWS Application Metrics
+  # =============================================================================
+  - job_name: 'adws'
+    static_configs:
+      - targets:
+          - 'phase4b_test:8000'
+        labels:
+          service: 'adws-api'
+          component: 'application'
+          version: '2.0.0'
+
+    # Metrics path (default is /metrics)
+    metrics_path: '/metrics'
+
+    # Scrape interval (override global)
+    scrape_interval: 10s
+
+    # Scrape timeout (override global)
+    scrape_timeout: 5s
+
+    # HTTP configuration
+    honor_labels: true
+    honor_timestamps: true
+
+  # =============================================================================
+  # Prometheus Self-Monitoring
+  # =============================================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets:
+          - 'localhost:9090'
+        labels:
+          service: 'prometheus'
+          component: 'monitoring'
+
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # =============================================================================
+  # Grafana Metrics (Optional)
+  # =============================================================================
+  - job_name: 'grafana'
+    static_configs:
+      - targets:
+          - 'grafana:3000'
+        labels:
+          service: 'grafana'
+          component: 'visualization'
+
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # =============================================================================
+  # Docker Container Metrics (Optional)
+  # =============================================================================
+  # Uncomment if you have cAdvisor running:
+  # - job_name: 'cadvisor'
+  #   static_configs:
+  #     - targets:
+  #         - 'cadvisor:8080'
+  #       labels:
+  #         service: 'cadvisor'
+  #         component: 'monitoring'
+  #
+  #   scrape_interval: 30s
+  #   scrape_timeout: 10s
+
+  # =============================================================================
+  # Node Exporter Metrics (Optional)
+  # =============================================================================
+  # Uncomment if you have Node Exporter running:
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets:
+  #         - 'node-exporter:9100'
+  #       labels:
+  #         service: 'node-exporter'
+  #         component: 'monitoring'
+  #
+  #   scrape_interval: 30s
+  #   scrape_timeout: 10s
+
+# Storage configuration
+storage:
+  tsdb:
+    # How long to retain data (default 15 days from .env)
+    retention.time: '${PROMETHEUS_RETENTION_DAYS:-15d}'
+
+    # Minimum retention time
+    retention.size: '10GB'
+
+    # Compression settings
+    wal_compression: true
+
+# Remote write configuration (optional - for long-term storage)
+# remote_write:
+#   - url: 'http://remote-storage:9009/api/v1/push'
+#     queue_config:
+#       capacity: 10000
+#       max_samples_per_send: 5000
+#       batch_send_deadline: 5s
+#       max_shards: 10
+#       min_shards: 1
+
+# Remote read configuration (optional)
+# remote_read:
+#   - url: 'http://remote-storage:9009/api/v1/read'
+#     read_recent: true

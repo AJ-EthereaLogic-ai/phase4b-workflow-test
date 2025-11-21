@@ -1,0 +1,220 @@
+name: Release Pipeline
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+      deploy_staging:
+        description: 'Deploy to staging'
+        required: true
+        type: boolean
+        default: true
+      deploy_production:
+        description: 'Deploy to production'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+
+    steps:
+      - name: Extract version
+        id: extract
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+
+          # Validate version format (vX.Y.Z)
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version format: $VERSION (expected vX.Y.Z)"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "::notice::Release version: $VERSION"
+
+  test:
+    name: Run Tests
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  build:
+    name: Build Docker Image
+    needs: [validate, test]
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      tag: ${{ needs.validate.outputs.version }}
+    secrets: inherit
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [validate, build]
+    if: github.event.inputs.deploy_staging != 'false'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
+      version: ${{ needs.validate.outputs.version }}
+      enable_rollback: true
+    secrets: inherit
+
+  staging-tests:
+    name: Staging Smoke Tests
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run smoke tests against staging
+        run: |
+          # Add staging smoke tests here
+          echo "Running smoke tests against staging environment"
+
+          # Example: Test health endpoint
+          STAGING_URL="https://phase4b_test.staging.example.com"
+          curl -f "$STAGING_URL/health" || exit 1
+
+          echo "::notice::Staging smoke tests passed"
+
+  deploy-production:
+    name: Deploy to Production
+    needs: [validate, build, deploy-staging, staging-tests]
+    if: github.event.inputs.deploy_production == 'true' || github.event_name == 'release'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+      version: ${{ needs.validate.outputs.version }}
+      enable_rollback: true
+    secrets: inherit
+    environment:
+      name: production
+      url: https://phase4b_test.production.example.com
+
+  create-release-notes:
+    name: Create Release Notes
+    needs: [validate, build]
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            COMMITS=$(git log --oneline --pretty=format:"- %s" HEAD)
+          else
+            COMMITS=$(git log --oneline --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
+          fi
+
+          echo "## Changes" > changelog.md
+          echo "" >> changelog.md
+          echo "$COMMITS" >> changelog.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.version }}
+          name: Release ${{ needs.validate.outputs.version }}
+          body_path: changelog.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    name: Send Notifications
+    needs: [validate, deploy-production]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Determine status
+        id: status
+        run: |
+          if [ "${{ needs.deploy-production.result }}" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=✅ Release ${{ needs.validate.outputs.version }} deployed successfully to production" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "message=❌ Release ${{ needs.validate.outputs.version }} failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Print notification
+        run: |
+          echo "${{ steps.status.outputs.message }}"
+
+          if [ "${{ steps.status.outputs.status }}" == "success" ]; then
+            echo "::notice::${{ steps.status.outputs.message }}"
+          else
+            echo "::error::${{ steps.status.outputs.message }}"
+          fi
+
+      # Add your notification integrations here (Slack, email, etc.)
+      # - name: Send Slack notification
+      #   uses: slackapi/slack-github-action@v1
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "${{ steps.status.outputs.message }}"
+      #       }
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  summary:
+    name: Release Summary
+    needs: [validate, test, build, deploy-staging, deploy-production]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Print summary
+        run: |
+          echo "## Release Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.validate.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Validate**: ${{ needs.validate.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Test**: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build**: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deploy Staging**: ${{ needs.deploy-staging.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deploy Production**: ${{ needs.deploy-production.result }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check overall status
+        run: |
+          if [ "${{ needs.validate.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ]; then
+            echo "::error::Release pipeline failed"
+            exit 1
+          fi
+
+          echo "::notice::Release pipeline completed successfully"

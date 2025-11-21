@@ -1,0 +1,116 @@
+# =============================================================================
+# Phase4B Test Project - Kubernetes Ingress
+# =============================================================================
+# Provides external HTTP/HTTPS access to the ADWS application
+#
+# Prerequisites:
+# - Ingress controller must be installed (nginx, traefik, etc.)
+# - For HTTPS: TLS certificate and secret must be created
+#
+# Common Ingress Controllers:
+# - NGINX: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+# - Traefik: helm install traefik traefik/traefik
+#
+# To create TLS secret:
+#   kubectl create secret tls phase4b_test-tls \
+#     --cert=path/to/tls.crt \
+#     --key=path/to/tls.key \
+#     -n phase4b_test
+#
+# Usage:
+#   kubectl apply -f k8s/ingress.yaml -n phase4b_test
+#   kubectl get ingress -n phase4b_test
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: phase4b_test
+  namespace: phase4b_test
+  labels:
+    app: phase4b_test
+    component: ingress
+  annotations:
+    # NGINX Ingress Controller Annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Set to "true" for HTTPS enforcement
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+
+    # Rate Limiting (optional)
+    # nginx.ingress.kubernetes.io/limit-rps: "10"
+
+    # CORS (optional)
+    # nginx.ingress.kubernetes.io/enable-cors: "true"
+    # nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+
+    # Traefik Annotations (uncomment if using Traefik)
+    # traefik.ingress.kubernetes.io/router.entrypoints: web
+    # traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+
+spec:
+  # Ingress Class
+  ingressClassName: nginx  # Change to 'traefik' if using Traefik
+
+  # TLS Configuration (uncomment for HTTPS)
+  # tls:
+  # - hosts:
+  #   - phase4b_test.example.com
+  #   secretName: phase4b_test-tls
+
+  # Routing Rules
+  rules:
+  # HTTP Access (update with your domain)
+  - host: phase4b_test.local  # Change to your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: phase4b_test
+            port:
+              number: 8000
+
+  # Additional hosts (optional)
+  # - host: api.phase4b_test.com
+  #   http:
+  #     paths:
+  #     - path: /
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: phase4b_test
+  #           port:
+  #             number: 8000
+
+---
+# =============================================================================
+# Local Development Ingress (Optional)
+# =============================================================================
+# For local development with minikube or kind
+# Access via: http://localhost or http://phase4b_test.local
+# =============================================================================
+
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: phase4b_test-local
+#   namespace: phase4b_test
+#   labels:
+#     app: phase4b_test
+#     component: ingress
+#     environment: local
+# spec:
+#   rules:
+#   - http:  # No host specified = matches all
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: phase4b_test
+#             port:
+#               number: 8000

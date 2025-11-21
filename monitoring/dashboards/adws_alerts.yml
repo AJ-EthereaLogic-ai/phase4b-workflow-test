@@ -1,0 +1,269 @@
+# =============================================================================
+# {{ cookiecutter.project_name }} - Prometheus Alert Rules
+# =============================================================================
+# Alert rules for monitoring ADWS application health and performance
+#
+# This file defines alerts that fire when certain conditions are met.
+# Alerts are evaluated by Prometheus at the `evaluation_interval` defined
+# in prometheus.yml
+#
+# Alert Severity Levels:
+# - critical: Immediate action required, service is down or severely degraded
+# - warning:  Investigation needed, potential issues detected
+# - info:     Informational, no action required but worth noting
+#
+# For more information:
+# - https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/
+# =============================================================================
+
+groups:
+  # ===========================================================================
+  # Application Health Alerts
+  # ===========================================================================
+  - name: adws_health
+    interval: 30s
+    rules:
+      # Container/Service Down
+      - alert: ADWSServiceDown
+        expr: up{job="adws"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: availability
+        annotations:
+          summary: "ADWS service is down"
+          description: "ADWS API service has been down for more than 2 minutes"
+          impact: "Application is unavailable to users"
+          action: "Check container logs and restart service if needed"
+
+      # High Error Rate
+      - alert: HighEventErrorRate
+        expr: rate(adws_event_subscriber_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: events
+        annotations:
+          summary: "High event subscriber error rate"
+          description: "Event subscriber error rate is {{ $value | humanize }} errors/sec (threshold: 0.1/sec)"
+          impact: "Event processing may be degraded"
+          action: "Check event subscriber logs for error details"
+
+  # ===========================================================================
+  # Performance Alerts
+  # ===========================================================================
+  - name: adws_performance
+    interval: 30s
+    rules:
+      # High Workflow Latency
+      - alert: HighWorkflowLatency
+        expr: histogram_quantile(0.95, rate(adws_workflow_duration_seconds_bucket[5m])) > 30
+        for: 10m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "High workflow latency (P95 > 30s)"
+          description: "P95 workflow duration is {{ $value | humanize }}s (threshold: 30s)"
+          impact: "Workflows are taking longer than expected to complete"
+          action: "Investigate slow workflows, check database performance"
+
+      # Slow Database Queries
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, rate(adws_state_query_duration_seconds_bucket[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow database queries (P95 > 100ms)"
+          description: "P95 database query duration is {{ $value | humanize }}s (threshold: 0.1s)"
+          impact: "Application performance may be degraded"
+          action: "Check database indexes, analyze slow queries"
+
+      # High EventBus Latency
+      - alert: HighEventBusLatency
+        expr: histogram_quantile(0.95, rate(adws_event_publish_duration_seconds_bucket[5m])) > 1.0
+        for: 10m
+        labels:
+          severity: warning
+          component: events
+        annotations:
+          summary: "High event publish latency (P95 > 1s)"
+          description: "P95 event publish duration is {{ $value | humanize }}s (threshold: 1s)"
+          impact: "Event processing may be delayed"
+          action: "Check event bus disk I/O, file backend performance"
+
+  # ===========================================================================
+  # Resource Utilization Alerts
+  # ===========================================================================
+  - name: adws_resources
+    interval: 30s
+    rules:
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            container_memory_usage_bytes{name=~".*{{ cookiecutter.project_slug }}.*"}
+            /
+            container_spec_memory_limit_bytes{name=~".*{{ cookiecutter.project_slug }}.*"}
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High memory usage (>90%)"
+          description: "Memory usage is {{ $value | humanizePercentage }} of limit"
+          impact: "Application may be at risk of OOM kill"
+          action: "Check for memory leaks, consider increasing memory limit"
+
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: |
+          (
+            rate(container_cpu_usage_seconds_total{name=~".*{{ cookiecutter.project_slug }}.*"}[5m])
+            /
+            container_spec_cpu_quota{name=~".*{{ cookiecutter.project_slug }}.*"}
+            * 100000
+          ) > 90
+        for: 10m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High CPU usage (>90%)"
+          description: "CPU usage is {{ $value | humanize }}% of limit"
+          impact: "Application performance may be degraded"
+          action: "Check for CPU-intensive operations, consider scaling"
+
+  # ===========================================================================
+  # Business Logic Alerts
+  # ===========================================================================
+  - name: adws_business
+    interval: 1m
+    rules:
+      # No Active Workflows (Potential Stuck State)
+      - alert: NoActiveWorkflows
+        expr: adws_workflows_active == 0
+        for: 30m
+        labels:
+          severity: info
+          component: workflows
+        annotations:
+          summary: "No active workflows for 30 minutes"
+          description: "No workflows have been active for the past 30 minutes"
+          impact: "Application may be idle or stuck"
+          action: "Check if this is expected behavior, investigate potential deadlocks"
+
+      # High Cost Rate
+      - alert: HighCostRate
+        expr: rate(adws_cost_usd_total[1h]) > 10
+        for: 1h
+        labels:
+          severity: warning
+          component: cost
+        annotations:
+          summary: "High API cost rate (>$10/hour)"
+          description: "Cost rate is ${{ $value | humanize }}/hour (threshold: $10/hour)"
+          impact: "API costs are higher than expected"
+          action: "Review LLM provider usage, check for cost optimization opportunities"
+
+      # Workflow Stuck in Phase
+      - alert: WorkflowStuckInPhase
+        expr: increase(adws_workflows_total[1h]) == 0 and adws_workflows_active > 0
+        for: 1h
+        labels:
+          severity: warning
+          component: workflows
+        annotations:
+          summary: "Workflows may be stuck"
+          description: "{{ $value }} active workflows but no completions in past hour"
+          impact: "Workflows may be deadlocked or stuck"
+          action: "Check workflow logs, investigate stuck detector results"
+
+  # ===========================================================================
+  # Data Integrity Alerts
+  # ===========================================================================
+  - name: adws_data
+    interval: 1m
+    rules:
+      # High Event Loss Rate (if events fail to persist)
+      - alert: HighEventLossRate
+        expr: rate(adws_event_subscriber_errors_total{error="persistence_failure"}[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          component: data
+        annotations:
+          summary: "High event loss rate due to persistence failures"
+          description: "Event persistence failing at {{ $value | humanize }} events/sec"
+          impact: "Event data may be lost"
+          action: "Check disk space, file permissions, database connectivity"
+
+  # ===========================================================================
+  # Container Health Alerts
+  # ===========================================================================
+  - name: adws_container
+    interval: 30s
+    rules:
+      # Container Restarts
+      - alert: FrequentContainerRestarts
+        expr: rate(kube_pod_container_status_restarts_total{pod=~".*{{ cookiecutter.project_slug }}.*"}[15m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: availability
+        annotations:
+          summary: "Frequent container restarts"
+          description: "Container has restarted {{ $value | humanize }} times in the last 15 minutes"
+          impact: "Service availability may be degraded"
+          action: "Check container logs for crash reasons"
+
+      # Pod Not Ready
+      - alert: PodNotReady
+        expr: kube_pod_status_phase{pod=~".*{{ cookiecutter.project_slug }}.*", phase!="Running"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          component: availability
+        annotations:
+          summary: "Pod is not in Running state"
+          description: "Pod {{ $labels.pod }} is in {{ $labels.phase }} state"
+          impact: "Service may be unavailable"
+          action: "Check pod events and logs: kubectl describe pod {{ $labels.pod }}"
+
+# =============================================================================
+# Alert Routing (Configure in Alertmanager)
+# =============================================================================
+# Example Alertmanager configuration for routing alerts:
+#
+# route:
+#   receiver: 'default'
+#   group_by: ['alertname', 'cluster', 'service']
+#   group_wait: 10s
+#   group_interval: 10s
+#   repeat_interval: 12h
+#   routes:
+#     - match:
+#         severity: critical
+#       receiver: 'pagerduty'
+#     - match:
+#         severity: warning
+#       receiver: 'slack'
+#     - match:
+#         severity: info
+#       receiver: 'email'
+#
+# receivers:
+#   - name: 'default'
+#     email_configs:
+#       - to: 'team@example.com'
+#   - name: 'slack'
+#     slack_configs:
+#       - api_url: 'https://hooks.slack.com/services/...'
+#         channel: '#alerts'
+#   - name: 'pagerduty'
+#     pagerduty_configs:
+#       - service_key: 'your-pagerduty-key'
+

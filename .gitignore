@@ -1,0 +1,110 @@
+# Phase4B Test Project - Git Ignore File
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual Environments
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Testing
+.coverage
+*.coverage
+coverage/
+coverage.xml
+coverage.json
+.pytest_cache
+.pytest_cache/
+htmlcov/
+!docs/reports/coverage/
+!docs/reports/coverage/coverage.xml
+!docs/reports/coverage/coverage.json
+!docs/reports/coverage/htmlcov/
+
+# Linting and Type Checking
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# Logs
+logs/
+*.log
+
+# ADWS State and Events
+.adws/
+*.jsonl
+
+# Database Files
+*.db
+*.sqlite
+*.sqlite3
+*.tmp
+*.temp
+
+# Test Artifacts
+<Mock*>
+*mock*.db
+*test*.db
+.test_*
+test_*.tmp
+
+# Node Modules (if frontend is included)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Docker & Deployment (if deployment enabled)
+# Deployment artifacts
+logs/deployments/
+backups/
+.last_successful_version
+
+# Docker volumes (local development)
+.docker-volumes/
+
+# Kubernetes secrets (DO NOT COMMIT)
+k8s/*-secrets.yaml
+k8s/secret.yaml
+
+# Environment-specific configs
+.env.production
+.env.staging
+docker-compose.override.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini

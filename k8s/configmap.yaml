@@ -1,0 +1,46 @@
+# =============================================================================
+# Phase4B Test Project - Kubernetes ConfigMap
+# =============================================================================
+# Stores non-sensitive configuration data for the ADWS application
+#
+# Usage:
+#   kubectl apply -f k8s/configmap.yaml -n phase4b_test
+# =============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: phase4b_test-config
+  namespace: phase4b_test
+  labels:
+    app: phase4b_test
+    component: configuration
+data:
+  # ADWS Application Configuration
+  ADWS_LOG_LEVEL: "INFO"
+  ADWS_METRICS_ENABLED: "true"
+  ADWS_HEALTH_CHECKS_ENABLED: "true"
+  ADWS_API_HOST: "0.0.0.0"
+  ADWS_API_PORT: "8000"
+  ADWS_WORKSPACE_DIR: "/app/.adws"
+  ADWS_DB_PATH: "/app/.adws/state/workflows.db"
+  ADWS_EVENT_BUS_DIR: "/app/.adws/events"
+
+  # Python Configuration
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+  # Deployment Configuration
+  DEPLOYMENT_ENV: "production"
+  ENGINEER_NAME: "Your Name"
+
+  # Git Repository
+  GIT_REPOSITORY: "phase4b_test"
+
+  # Claude Code Configuration
+  CLAUDE_CODE_PATH: "claude"
+  CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: "true"
+
+  # Monitoring Configuration
+  PROMETHEUS_PORT: "9090"
+  PROMETHEUS_RETENTION_DAYS: "15d"

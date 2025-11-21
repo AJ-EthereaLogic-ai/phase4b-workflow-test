@@ -1,0 +1,102 @@
+# =============================================================================
+# Phase4B Test Project - Horizontal Pod Autoscaler (HPA)
+# =============================================================================
+# Automatically scales the number of pods based on CPU/memory utilization
+#
+# Prerequisites:
+# - Metrics Server must be installed in the cluster
+#   kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+#
+# - Resource requests must be defined in deployment.yaml (already configured)
+#
+# Verify Metrics Server:
+#   kubectl top nodes
+#   kubectl top pods -n phase4b_test
+#
+# Usage:
+#   kubectl apply -f k8s/hpa.yaml -n phase4b_test
+#   kubectl get hpa -n phase4b_test
+#   kubectl describe hpa phase4b_test -n phase4b_test
+# =============================================================================
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: phase4b_test
+  namespace: phase4b_test
+  labels:
+    app: phase4b_test
+    component: autoscaling
+spec:
+  # Target Deployment
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: phase4b_test
+
+  # Scaling Limits
+  minReplicas: 2   # Minimum number of pods for high availability
+  maxReplicas: 10  # Maximum number of pods (adjust based on your needs)
+
+  # Scaling Behavior (optional - fine-tune scaling speed)
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 50  # Scale down by max 50% of current replicas
+        periodSeconds: 60
+      - type: Pods
+        value: 2   # Scale down by max 2 pods
+        periodSeconds: 60
+      selectPolicy: Min  # Use the policy that results in fewer pods removed
+
+    scaleUp:
+      stabilizationWindowSeconds: 0  # Scale up immediately
+      policies:
+      - type: Percent
+        value: 100  # Scale up by max 100% of current replicas
+        periodSeconds: 30
+      - type: Pods
+        value: 4    # Scale up by max 4 pods
+        periodSeconds: 30
+      selectPolicy: Max  # Use the policy that results in more pods added
+
+  # Metrics for Autoscaling
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Scale when average CPU > 70%
+
+  # Memory-based scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Scale when average memory > 80%
+
+  # Custom metrics (optional - uncomment if using Prometheus Adapter)
+  # - type: Pods
+  #   pods:
+  #     metric:
+  #       name: http_requests_per_second
+  #     target:
+  #       type: AverageValue
+  #       averageValue: "1000"  # Scale when requests > 1000/s per pod
+
+  # External metrics (optional - uncomment if using external metrics)
+  # - type: External
+  #   external:
+  #     metric:
+  #       name: queue_messages_ready
+  #       selector:
+  #         matchLabels:
+  #           queue: "phase4b_test"
+  #     target:
+  #       type: AverageValue
+  #       averageValue: "30"  # Scale when queue has > 30 messages per pod
