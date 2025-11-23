@@ -1,0 +1,48 @@
+# ADWS Configuration for Phase4B Test Project
+
+[providers.claude]
+enabled = true
+api_key_env = "ANTHROPIC_API_KEY"
+model = "claude-3-5-sonnet-20241022"
+timeout_seconds = 60.0
+max_retries = 3
+
+[providers.openai]
+enabled = true
+api_key_env = "OPENAI_API_KEY"
+model = "gpt-4o"
+timeout_seconds = 60.0
+max_retries = 3
+
+[providers.gemini]
+enabled = true
+api_key_env = "GEMINI_API_KEY"
+model = "gemini-1.5-pro"
+timeout_seconds = 60.0
+max_retries = 3
+
+default_provider = "claude"
+
+[state]
+state_dir = ".adws/state"
+sqlite_db = ".adws/state/workflows.db"
+
+[cleanup_policy]
+policy_name = "archive_completed"
+target_state = "completed"
+min_age_days = 30
+action = "archive"
+
+[event]
+backend = "file"
+file = ".adws/events/events.jsonl"
+
+[tdd]
+enabled = true
+coverage_target = 0.90
+test_framework = "pytest"
+
+[cost]
+enable_tracking = true
+daily_budget_usd = 10.0
+warn_threshold = 0.8
