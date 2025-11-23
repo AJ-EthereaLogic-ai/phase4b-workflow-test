@@ -1,11 +1,11 @@
 {
-  "timestamp": "2025-11-22T22:52:29.180193",
+  "timestamp": "2025-11-22T23:19:03.143757",
   "results": [
     {
       "workflow": "BackendStandardWorkflow",
       "issue_number": 1,
-      "success": false,
-      "duration_seconds": 0.250261,
+      "success": true,
+      "duration_seconds": 47.895164,
       "output_length": 0,
       "error": null
     },
@@ -13,14 +13,14 @@
       "workflow": "BackendTDDWorkflow",
       "issue_number": 2,
       "success": false,
-      "duration_seconds": 1.400866,
-      "error": "All providers failed to respond"
+      "duration_seconds": 39.916047,
+      "error": "1 validation error for ConsensusResult\nagreement\n  Input should be less than or equal to 1 [type=less_than_equal, input_value=1.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.12/v/less_than_equal"
     },
     {
       "workflow": "FrontendStandardWorkflow",
       "issue_number": 3,
       "success": true,
-      "duration_seconds": 36.497285,
+      "duration_seconds": 25.705942,
       "output_length": 0,
       "error": null
     },
@@ -28,7 +28,7 @@
       "workflow": "FrontendTDDWorkflow",
       "issue_number": 4,
       "success": false,
-      "duration_seconds": 54.066385,
+      "duration_seconds": 52.611748,
       "error": "1 validation error for ConsensusResult\nagreement\n  Input should be less than or equal to 1 [type=less_than_equal, input_value=1.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.12/v/less_than_equal"
     }
   ]

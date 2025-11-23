@@ -40,13 +40,13 @@ class LLMOrchestratorConfig(BaseModel):
         description="Provider to use when no override is supplied",
     )
     default_model: str = Field(
-        "claude-3-5-sonnet-20241022",
+        "claude-sonnet-4-5",
         description="Model associated with the default provider",
     )
     backend_route: ProviderRoute = Field(
         default_factory=lambda: ProviderRoute(
             provider="claude",
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-5",
             temperature=0.2,
         )
     )

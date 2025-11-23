@@ -1,18 +1,14 @@
 """
-Complete automated workflow testing script with proper provider setup.
+Fixed automated workflow testing script.
+Works with the actual ADWS workflow API.
 """
 
 import asyncio
 import json
-import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 from adws.workflows import (
     BackendStandardWorkflow,
@@ -20,67 +16,6 @@ from adws.workflows import (
     FrontendStandardWorkflow,
     FrontendTDDWorkflow
 )
-from adws.llm import LLMOrchestrator, LLMOrchestratorConfig
-from adws.providers import ProviderRegistry
-from adws.providers.interfaces import ProviderConfig
-from adws.providers.implementations import (
-    OpenAIProvider,
-    GeminiProvider
-)
-# Import our new direct Anthropic provider
-from adws.providers.implementations.anthropic_direct import AnthropicProvider
-
-
-def setup_providers() -> LLMOrchestrator:
-    """Setup and register all LLM providers with proper configuration."""
-
-    # Create provider registry
-    registry = ProviderRegistry()
-
-    # Register Claude provider
-    if os.getenv("ANTHROPIC_API_KEY"):
-        claude_config = ProviderConfig(
-            name="claude",
-            enabled=True,
-            api_key=os.getenv("ANTHROPIC_API_KEY")
-        )
-        claude_provider = AnthropicProvider(config=claude_config)
-        registry.register("claude", claude_provider, claude_config)
-        print("✅ Registered Claude provider")
-
-    # Register OpenAI provider
-    if os.getenv("OPENAI_API_KEY"):
-        openai_config = ProviderConfig(
-            name="openai",
-            enabled=True,
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
-        openai_provider = OpenAIProvider(config=openai_config)
-        registry.register("openai", openai_provider, openai_config)
-        print("✅ Registered OpenAI provider")
-
-    # Register Gemini provider
-    if os.getenv("GEMINI_API_KEY"):
-        gemini_config = ProviderConfig(
-            name="gemini",
-            enabled=True,
-            api_key=os.getenv("GEMINI_API_KEY")
-        )
-        gemini_provider = GeminiProvider(config=gemini_config)
-        registry.register("gemini", gemini_provider, gemini_config)
-        print("✅ Registered Gemini provider")
-
-    # Create LLM Orchestrator config
-    config = LLMOrchestratorConfig(
-        default_provider="claude",
-        default_model="claude-3-5-sonnet-20241022",
-        consensus_providers=["claude", "openai", "gemini"]
-    )
-
-    # Create orchestrator with registry
-    orchestrator = LLMOrchestrator(config=config, registry=registry)
-
-    return orchestrator
 
 
 def get_github_issue(issue_number: int) -> str:
@@ -101,8 +36,7 @@ def get_github_issue(issue_number: int) -> str:
 class WorkflowTestRunner:
     """Automated test runner for all ADWS workflows."""
 
-    def __init__(self, orchestrator: LLMOrchestrator):
-        self.orchestrator = orchestrator
+    def __init__(self):
         self.results: List[Dict] = []
 
     async def test_workflow(
@@ -126,12 +60,9 @@ class WorkflowTestRunner:
             requirement = get_github_issue(issue_number)
             print(f"✅ Got requirement ({len(requirement)} chars)")
 
-            # Initialize workflow with shared orchestrator
+            # Initialize workflow
             print(f"🔧 Initializing {workflow_name}...")
-            workflow = workflow_class(
-                orchestrator=self.orchestrator,
-                **workflow_kwargs
-            )
+            workflow = workflow_class(**workflow_kwargs)
 
             # Generate unique ADW ID
             adw_id = f"test-{workflow_name.lower()}-{issue_number}"
@@ -151,7 +82,7 @@ class WorkflowTestRunner:
                 "issue_number": issue_number,
                 "success": result.success,
                 "duration_seconds": duration,
-                "output_length": len(result.output) if hasattr(result, 'output') and result.output else 0,
+                "output": result.output if hasattr(result, 'output') else None,
                 "error": None
             }
 
@@ -159,8 +90,7 @@ class WorkflowTestRunner:
                 print(f"\n✅ {workflow_name} PASSED")
                 print(f"   Duration: {duration:.2f}s")
                 if hasattr(result, 'output') and result.output:
-                    print(f"   Output generated: {len(result.output)} chars")
-                    print(f"   Preview: {result.output[:200]}...")
+                    print(f"   Output preview: {result.output[:200]}...")
             else:
                 print(f"\n❌ {workflow_name} FAILED")
                 print(f"   Reason: Workflow reported failure")
@@ -186,7 +116,6 @@ class WorkflowTestRunner:
         print("\n" + "=" * 80)
         print("ADWS WORKFLOW AUTONOMOUS COMPLETION TESTS")
         print("=" * 80)
-        print()
 
         # Test 1: Backend Standard
         await self.test_workflow(
@@ -243,8 +172,6 @@ class WorkflowTestRunner:
             print(f"{status} | {result['workflow']}")
             print(f"       Issue #{result['issue_number']}")
             print(f"       Duration: {result.get('duration_seconds', 0):.2f}s")
-            if result.get("output_length"):
-                print(f"       Output: {result['output_length']} chars")
             if result.get("error"):
                 print(f"       Error: {result['error']}")
             print()
@@ -262,12 +189,7 @@ class WorkflowTestRunner:
 
 async def main():
     """Main entry point."""
-    print("\n🔧 Setting up LLM providers...")
-    orchestrator = setup_providers()
-
-    print(f"\n📋 Registered providers: {orchestrator._registry.list_providers()}")
-
-    runner = WorkflowTestRunner(orchestrator)
+    runner = WorkflowTestRunner()
     await runner.run_all_tests()
 
 
