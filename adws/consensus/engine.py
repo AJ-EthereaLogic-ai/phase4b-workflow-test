@@ -558,6 +558,8 @@ class ConsensusEngine:
         # Select best
         best = scored_responses[0]
         agreement = ((best.score or 0.0) / 100.0)
+        # Clamp agreement to [0.0, 1.0] range to prevent validation errors
+        agreement = max(0.0, min(1.0, agreement))
 
         # Calculate total cost and latency
         total_cost = sum(r.response.cost_usd for r in responses)
@@ -616,6 +618,8 @@ class ConsensusEngine:
 
             best = sorted_responses[0]
             agreement = (best.score or 0.0) / 100.0
+            # Clamp agreement to [0.0, 1.0] range to prevent validation errors
+            agreement = max(0.0, min(1.0, agreement))
 
             # Calculate total cost and latency
             total_cost = sum(r.response.cost_usd for r in responses)
